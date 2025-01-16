@@ -122,7 +122,7 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
 
 def main():
     # Load stock symbols dynamically by scraping the web
-    stock_symbols = load_stock_symbols()  # Fetch the latest stock symbols from the web
+    stock_symbols = load_stock_symbols() 
     
     start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
     end_date = input("Enter the end date (YYYY-MM-DD): ").strip()
