@@ -121,14 +121,33 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
     print("\nFinished checking all stocks.")
 
 def main():
-    # Load stock symbols dynamically by scraping the web
-    stock_symbols = load_stock_symbols() 
-    
+    # Prompt user for mode selection
+    print("Would you like to:")
+    print("1. Check current trending stocks")
+    print("2. Check one specific stock")
+    choice = input("Enter 1 or 2: ").strip()
+
+    # Load stock symbols dynamically for trending stocks
+    if choice == "1":
+        stock_symbols = load_stock_symbols()
+        print(f"Loaded {len(stock_symbols)} trending stocks.")
+    elif choice == "2":
+        specific_stock = input("Enter the stock symbol (e.g., AAPL, TSLA): ").strip().upper()
+        stock_symbols = [specific_stock]  # Use a single stock symbol in the list
+    else:
+        print("Invalid choice. Please restart the program and choose either 1 or 2.")
+        return
+
+    # Get date range
     start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
     end_date = input("Enter the end date (YYYY-MM-DD): ").strip()
 
-    # Check for crossovers across the list of stocks
+    # Check for crossovers
     check_stocks_for_crossovers(stock_symbols, start_date, end_date)
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == "__main__":
     main()
