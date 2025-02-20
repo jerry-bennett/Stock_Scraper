@@ -3,11 +3,23 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from update_stocks import load_stock_symbols  # Import the function that scrapes the stock symbols
 
+import yfinance as yf
+
 def fetch_historical_data(stock_symbol, start_date, end_date):
-    # Fetch historical data using yfinance
-    stock = yf.Ticker(stock_symbol)
-    historical_data = stock.history(period='1d', start=start_date, end=end_date)
-    return historical_data
+    try:
+        stock = yf.Ticker(stock_symbol)
+        historical_data = stock.history(period='1d', start=start_date, end=end_date)
+
+        if historical_data.empty:
+            print(f"⚠️ No historical data found for {stock_symbol}. It might be delisted or invalid.")
+            return None  # Return None for invalid symbols
+
+        return historical_data
+
+    except Exception as e:
+        print(f"❌ Failed to fetch data for {stock_symbol}: {e}")
+        return None  # Return None on failure
+
 
 def calculate_indicators(historical_data):
     # Calculate RSI
@@ -100,25 +112,32 @@ def detect_crossovers(historical_data):
     return golden_cross, death_cross
 
 def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
+    valid_symbols = []  # Keep track of symbols with valid data
+
     for stock_symbol in stock_symbols:
-        print(f"Checking {stock_symbol}...")
+        print(f"\n🔍 Checking {stock_symbol}...")
+
         historical_data = fetch_historical_data(stock_symbol, start_date, end_date)
-        
-        if not historical_data.empty:
+
+        if historical_data is not None:  # Only process valid data
             golden_cross, death_cross = detect_crossovers(historical_data)
-            
+
             if golden_cross:
-                print(f"\nGolden Cross (Buy) occurred for {stock_symbol} on: {golden_cross}")
-                plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross, [])  # Pass the crossovers
-                
+                print(f"\n✨ Golden Cross (Buy Signal) detected for {stock_symbol} on: {golden_cross}")
+                plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross, [])
             elif death_cross:
-                print(f"\nDeath Cross (Sell) occurred for {stock_symbol} on: {death_cross}")
-                plot_stock_data_with_indicators(historical_data, stock_symbol, [], death_cross)  # Pass the crossovers
-                
+                print(f"\n⚠️ Death Cross (Sell Signal) detected for {stock_symbol} on: {death_cross}")
+                plot_stock_data_with_indicators(historical_data, stock_symbol, [], death_cross)
+            else:
+                print(f"📉 No significant crossover found for {stock_symbol}.")
+            
+            valid_symbols.append(stock_symbol)
+
         else:
-            print(f"No historical data found for {stock_symbol}.")
-    
-    print("\nFinished checking all stocks.")
+            print(f"❌ Skipping {stock_symbol} due to missing or invalid data.")
+
+    print(f"\n✅ Finished checking stocks. {len(valid_symbols)} stocks had valid data.")
+
 
 def main():
     # Prompt user for mode selection

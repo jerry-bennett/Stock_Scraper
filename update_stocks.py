@@ -1,38 +1,46 @@
 import requests
 from bs4 import BeautifulSoup
+import time
+import random
 
 def load_stock_symbols():
-    # List of Yahoo Finance URLs to scrape
-    urls = [
-        "https://finance.yahoo.com/markets/stocks/most-active/",
-        "https://finance.yahoo.com/markets/stocks/trending/",
-        "https://finance.yahoo.com/markets/stocks/gainers/",
-        "https://finance.yahoo.com/markets/stocks/losers/",
-    ]
+    urls = {
+        "Most Active": "https://finance.yahoo.com/most-active",
+        "Trending": "https://finance.yahoo.com/trending-tickers",
+        "Gainers": "https://finance.yahoo.com/gainers",
+        "Losers": "https://finance.yahoo.com/losers",
+    }
 
-    stock_symbols = set()  # Use a set to avoid duplicate symbols
+    stock_symbols = set()
 
-    for url in urls:
+    for category, url in urls.items():
         try:
-            print(f"Scraping stock symbols from: {url}")
-            response = requests.get(url)
-            response.raise_for_status()  # Raise an error for HTTP issues
-            
+            print(f"\nFetching stock symbols for: {category} ({url})...")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise error for HTTP issues
+
             soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Find stock symbols in the table (adjust the selector as necessary)
             table_rows = soup.select("table tbody tr")
+
+            symbols = []
             for row in table_rows:
                 columns = row.find_all("td")
-                if len(columns) > 0:
-                    symbol = columns[0].text.strip()  # Get the stock symbol
-                    stock_symbols.add(symbol)  # Add to the set
+                if columns:
+                    symbol = columns[0].text.strip()
+                    stock_symbols.add(symbol)
+                    symbols.append(symbol)
+
+            print(f"Fetched {len(symbols)} symbols: {symbols}")
+
+            # Delay between requests to prevent getting blocked
+            # time.sleep(random.uniform(3, 6))
 
         except Exception as e:
-            print(f"Error while scraping {url}: {e}")
+            print(f"Error fetching data from {url}: {e}")
 
-    return list(stock_symbols)  # Convert the set back to a list
-
-if __name__ == "__main__":
-    symbols = load_stock_symbols()
-    print(f"Loaded stock symbols: {symbols}")
+    final_symbols = list(stock_symbols)
+    print(f"\nTotal unique stock symbols collected: {len(final_symbols)}\n{final_symbols}")  # Final summary
+    return final_symbols
