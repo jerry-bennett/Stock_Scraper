@@ -41,6 +41,8 @@ def load_stock_symbols():
         except Exception as e:
             print(f"Error fetching data from {url}: {e}")
 
+    
+
     final_symbols = list(stock_symbols)
     print(f"\nTotal unique stock symbols collected: {len(final_symbols)}\n{final_symbols}")  # Final summary
     return final_symbols

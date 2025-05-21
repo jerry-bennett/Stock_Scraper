@@ -1,10 +1,16 @@
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
+import yfinance as yf
+import json
+import os
+from datetime import datetime, timedelta
 from update_stocks import load_stock_symbols  # Import the function that scrapes the stock symbols
+import random
 
 import yfinance as yf
-
+1
 def fetch_historical_data(stock_symbol, start_date, end_date):
     try:
         stock = yf.Ticker(stock_symbol)
@@ -112,14 +118,21 @@ def detect_crossovers(historical_data):
     return golden_cross, death_cross
 
 def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
-    valid_symbols = []  # Keep track of symbols with valid data
+    valid_symbols = []
+    skipped_symbols = load_skipped_symbols()
+    updated_skipped = skipped_symbols.copy()
+    today_str = datetime.today().strftime("%Y-%m-%d")
 
     for stock_symbol in stock_symbols:
+        if stock_symbol in skipped_symbols:
+            print(f"⏩ Skipping {stock_symbol} (recently checked)")
+            continue
+
         print(f"\n🔍 Checking {stock_symbol}...")
 
         historical_data = fetch_historical_data(stock_symbol, start_date, end_date)
 
-        if historical_data is not None:  # Only process valid data
+        if historical_data is not None:
             golden_cross, death_cross = detect_crossovers(historical_data)
 
             if golden_cross:
@@ -130,14 +143,79 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
                 plot_stock_data_with_indicators(historical_data, stock_symbol, [], death_cross)
             else:
                 print(f"📉 No significant crossover found for {stock_symbol}.")
-            
+                updated_skipped[stock_symbol] = today_str  # Track as temporarily uninteresting
+
             valid_symbols.append(stock_symbol)
 
         else:
             print(f"❌ Skipping {stock_symbol} due to missing or invalid data.")
+            updated_skipped[stock_symbol] = today_str
 
-    print(f"\n✅ Finished checking stocks. {len(valid_symbols)} stocks had valid data.")
+        time.sleep(1.5)  # Prevent rate limiting
 
+    save_skipped_symbols(updated_skipped)
+    print(f"\n✅ Finished checking stocks. {len(valid_symbols)} had valid data.")
+
+SKIPPED_FILE = "skipped_symbols.json"
+SKIP_DAYS = 3  # Number of days to temporarily skip symbols
+
+TRENDING_CACHE_FILE = "trending_cache.json"
+TRENDING_CACHE_DAYS = 3  # days before refresh
+
+def load_skipped_symbols():
+    if not os.path.exists(SKIPPED_FILE):
+        return {}
+
+    with open(SKIPPED_FILE, "r") as f:
+        data = json.load(f)
+
+    # Filter out expired skip entries
+    today = datetime.today().date()
+    return {
+        symbol: date_str for symbol, date_str in data.items()
+        if (today - datetime.strptime(date_str, "%Y-%m-%d").date()).days < SKIP_DAYS
+    }
+
+def save_skipped_symbols(skipped):
+    with open(SKIPPED_FILE, "w") as f:
+        json.dump(skipped, f)
+
+def load_cached_trending():
+    if not os.path.exists(TRENDING_CACHE_FILE):
+        return None
+
+    with open(TRENDING_CACHE_FILE, "r") as f:
+        try:
+            data = json.load(f)
+            timestamp = data.get("timestamp", 0)
+            age_days = (time.time() - timestamp) / (60 * 60 * 24)
+
+            if age_days > TRENDING_CACHE_DAYS:
+                return None  # Too old, need to refresh
+            return data.get("symbols", [])
+        except Exception as e:
+            print(f"Failed to load trending cache: {e}")
+            return None
+        
+def save_cached_trending(symbols):
+    with open(TRENDING_CACHE_FILE, "w") as f:
+        json.dump({
+            "timestamp": time.time(),
+            "symbols": symbols
+        }, f)
+def get_trending_symbols():
+        cached = load_cached_trending()
+        if cached:
+            print("✅ Using cached trending stocks.")
+            return cached
+
+        print("🔄 Fetching fresh trending stocks...")
+        symbols = load_stock_symbols()
+        save_cached_trending(symbols)
+        return symbols
+
+MAX_STOCKS = 10      
+SKIP_DAYS   = 3         
 
 def main():
     # Prompt user for mode selection
@@ -148,14 +226,27 @@ def main():
 
     # Load stock symbols dynamically for trending stocks
     if choice == "1":
-        stock_symbols = load_stock_symbols()
-        print(f"Loaded {len(stock_symbols)} trending stocks.")
+        stock_symbols = get_trending_symbols()
+        max_stocks = 10  
+        stock_symbols = stock_symbols[:max_stocks]
+        print(f"Loaded {len(stock_symbols)} trending stocks (limited to {max_stocks}).")
     elif choice == "2":
         specific_stock = input("Enter the stock symbol (e.g., AAPL, TSLA): ").strip().upper()
         stock_symbols = [specific_stock]  # Use a single stock symbol in the list
     else:
         print("Invalid choice. Please restart the program and choose either 1 or 2.")
         return
+    
+    # Load trending and skip list
+    raw_symbols  = get_trending_symbols()
+    skipped_dict = load_skipped_symbols()
+
+    # Exclude skipped
+    today_allowed = [s for s in raw_symbols if s not in skipped_dict]
+
+    # Shuffle before slicing
+    random.shuffle(today_allowed)
+    stock_symbols = today_allowed[:MAX_STOCKS]
 
     # Get date range
     start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
