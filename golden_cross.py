@@ -2,15 +2,12 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 import time
-import yfinance as yf
 import json
 import os
 from datetime import datetime, timedelta
 from update_stocks import load_stock_symbols  # Import the function that scrapes the stock symbols
 import random
 
-import yfinance as yf
-1
 def fetch_historical_data(stock_symbol, start_date, end_date):
     try:
         stock = yf.Ticker(stock_symbol)
@@ -162,19 +159,34 @@ SKIP_DAYS = 3  # Number of days to temporarily skip symbols
 TRENDING_CACHE_FILE = "trending_cache.json"
 TRENDING_CACHE_DAYS = 3  # days before refresh
 
+from datetime import datetime, timedelta
+
+def is_date_recent(date_str, days=1):
+    """Return True if the date string is within the last `days` days."""
+    try:
+        skipped_date = datetime.strptime(date_str, "%Y-%m-%d")
+        return datetime.now() - skipped_date < timedelta(days=days)
+    except ValueError:
+        return False
+
 def load_skipped_symbols():
-    if not os.path.exists(SKIPPED_FILE):
+    file_path = 'skipped_stocks.json'
+    if not os.path.exists(file_path):
         return {}
 
-    with open(SKIPPED_FILE, "r") as f:
-        data = json.load(f)
+    with open(file_path, 'r') as f:
+        try:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return {
+                    symbol: date_str for symbol, date_str in data.items()
+                    if not is_date_recent(date_str)
+                }
+            else:
+                return {}
+        except json.JSONDecodeError:
+            return {}
 
-    # Filter out expired skip entries
-    today = datetime.today().date()
-    return {
-        symbol: date_str for symbol, date_str in data.items()
-        if (today - datetime.strptime(date_str, "%Y-%m-%d").date()).days < SKIP_DAYS
-    }
 
 def save_skipped_symbols(skipped):
     with open(SKIPPED_FILE, "w") as f:
@@ -213,6 +225,17 @@ def get_trending_symbols():
         symbols = load_stock_symbols()
         save_cached_trending(symbols)
         return symbols
+def reset_cached_data():
+    # Customize these paths if your JSON files are stored elsewhere
+    cache_files = ['trending_cache.json', 'skipped_symbols.json']
+    
+    for file in cache_files:
+        try:
+            with open(file, 'w') as f:
+                json.dump({}, f)
+            print(f"✅ Reset {file}")
+        except Exception as e:
+            print(f"❌ Failed to reset {file}: {e}")
 
 MAX_STOCKS = 10      
 SKIP_DAYS   = 3         
@@ -222,31 +245,33 @@ def main():
     print("Would you like to:")
     print("1. Check current trending stocks")
     print("2. Check one specific stock")
-    choice = input("Enter 1 or 2: ").strip()
+    print("3. Reset cached data")
+    choice = input("Enter 1, 2, or 3: ").strip()
 
-    # Load stock symbols dynamically for trending stocks
     if choice == "1":
-        stock_symbols = get_trending_symbols()
-        max_stocks = 10  
-        stock_symbols = stock_symbols[:max_stocks]
+        raw_symbols = get_trending_symbols()
+        skipped_dict = load_skipped_symbols()
+
+        # Exclude skipped
+        today_allowed = [s for s in raw_symbols if s not in skipped_dict]
+
+        # Shuffle before slicing
+        random.shuffle(today_allowed)
+        max_stocks = 10
+        stock_symbols = today_allowed[:max_stocks]
         print(f"Loaded {len(stock_symbols)} trending stocks (limited to {max_stocks}).")
+
     elif choice == "2":
         specific_stock = input("Enter the stock symbol (e.g., AAPL, TSLA): ").strip().upper()
-        stock_symbols = [specific_stock]  # Use a single stock symbol in the list
-    else:
-        print("Invalid choice. Please restart the program and choose either 1 or 2.")
+        stock_symbols = [specific_stock]
+
+    elif choice == "3":
+        reset_cached_data()
         return
-    
-    # Load trending and skip list
-    raw_symbols  = get_trending_symbols()
-    skipped_dict = load_skipped_symbols()
 
-    # Exclude skipped
-    today_allowed = [s for s in raw_symbols if s not in skipped_dict]
-
-    # Shuffle before slicing
-    random.shuffle(today_allowed)
-    stock_symbols = today_allowed[:MAX_STOCKS]
+    else:
+        print("Invalid choice. Please restart the program and choose either 1, 2 or 3.")
+        return
 
     # Get date range
     start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
@@ -254,10 +279,6 @@ def main():
 
     # Check for crossovers
     check_stocks_for_crossovers(stock_symbols, start_date, end_date)
-
-if __name__ == "__main__":
-    main()
-
 
 if __name__ == "__main__":
     main()

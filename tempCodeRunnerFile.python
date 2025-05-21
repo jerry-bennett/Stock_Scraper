@@ -1,3 +1,4 @@
 import yfinance as yf
-data = yf.Ticker('AAPL').history(period='1d', start='2023-01-01', end='2023-12-31')
-print(data.head())
+ticker = yf.Ticker("AAPL")
+hist = ticker.history(period="1mo")
+print(hist)

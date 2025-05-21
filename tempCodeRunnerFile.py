@@ -1,1 +1,1 @@
-er
+get_trending_symbols
