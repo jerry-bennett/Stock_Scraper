@@ -8,21 +8,18 @@ from datetime import datetime, timedelta
 from update_stocks import load_stock_symbols  # Import the function that scrapes the stock symbols
 import random
 
-def fetch_historical_data(stock_symbol, start_date, end_date):
-    try:
-        stock = yf.Ticker(stock_symbol)
-        historical_data = stock.history(period='1d', start=start_date, end=end_date)
+def fetch_historical_data(symbol, start, end):
+    df = yf.download(symbol, start=start, end=end)
+    
+    if df is not None and not df.empty:
+        if len(df) >= 200:
+            df['50_MA'] = df['Close'].rolling(window=50).mean()
+            df['200_MA'] = df['Close'].rolling(window=200).mean()
+        else:
+            print(f"⚠️ Not enough data for 50/200 MA for {symbol} ({len(df)} rows)")
+        return df
 
-        if historical_data.empty:
-            print(f"⚠️ No historical data found for {stock_symbol}. It might be delisted or invalid.")
-            return None  # Return None for invalid symbols
-
-        return historical_data
-
-    except Exception as e:
-        print(f"❌ Failed to fetch data for {stock_symbol}: {e}")
-        return None  # Return None on failure
-
+    return None
 
 def calculate_indicators(historical_data):
     # Calculate RSI
@@ -93,32 +90,41 @@ def plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross,
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
 
-def detect_crossovers(historical_data):
-    # Calculate the moving averages again in case the data has changed or is missing
-    historical_data['50_MA'] = historical_data['Close'].rolling(window=50).mean()
-    historical_data['200_MA'] = historical_data['Close'].rolling(window=200).mean()
+def detect_crossovers(df, short=50, long=200):
+    df = df.copy()
+    df["SMA_short"] = df["Close"].rolling(window=short).mean()
+    df["SMA_long"] = df["Close"].rolling(window=long).mean()
+    df.dropna(inplace=True)
 
-    # Drop rows with NaN values in the moving averages columns
-    historical_data = historical_data.dropna(subset=['50_MA', '200_MA'])
+    if df.empty:
+        return [], []
 
-    # Golden Cross and Death Cross detection
-    golden_cross = []
-    death_cross = []
-    
-    for i in range(1, len(historical_data)):
-        # Use .iloc[] for index-based access
-        if historical_data.iloc[i]['50_MA'] > historical_data.iloc[i]['200_MA'] and historical_data.iloc[i-1]['50_MA'] <= historical_data.iloc[i-1]['200_MA']:
-            golden_cross.append(historical_data.index[i])
-        elif historical_data.iloc[i]['50_MA'] < historical_data.iloc[i]['200_MA'] and historical_data.iloc[i-1]['50_MA'] >= historical_data.iloc[i-1]['200_MA']:
-            death_cross.append(historical_data.index[i])
-    
-    return golden_cross, death_cross
+    golden_crosses = []
+    death_crosses = []
+    prev_short = df["SMA_short"].iloc[0]
+    prev_long = df["SMA_long"].iloc[0]
 
-def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
+    for i in range(1, len(df)):
+        curr_short = df["SMA_short"].iloc[i]
+        curr_long = df["SMA_long"].iloc[i]
+        date = df.index[i]
+
+        if prev_short < prev_long and curr_short >= curr_long:
+            golden_crosses.append(date)
+        elif prev_short > prev_long and curr_short <= curr_long:
+            death_crosses.append(date)
+
+        prev_short = curr_short
+        prev_long = curr_long
+
+    return golden_crosses, death_crosses
+
+def check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only=False, recent_days=30):
     valid_symbols = []
     skipped_symbols = load_skipped_symbols()
     updated_skipped = skipped_symbols.copy()
-    today_str = datetime.today().strftime("%Y-%m-%d")
+    today = datetime.today()
+    recent_cutoff = today - timedelta(days=recent_days)
 
     for stock_symbol in stock_symbols:
         if stock_symbol in skipped_symbols:
@@ -128,27 +134,25 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date):
         print(f"\n🔍 Checking {stock_symbol}...")
 
         historical_data = fetch_historical_data(stock_symbol, start_date, end_date)
-
         if historical_data is not None:
-            golden_cross, death_cross = detect_crossovers(historical_data)
+            golden_crosses, death_crosses = detect_crossovers(historical_data)
 
-            if golden_cross:
-                print(f"\n✨ Golden Cross (Buy Signal) detected for {stock_symbol} on: {golden_cross}")
-                plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross, [])
-            elif death_cross:
-                print(f"\n⚠️ Death Cross (Sell Signal) detected for {stock_symbol} on: {death_cross}")
-                plot_stock_data_with_indicators(historical_data, stock_symbol, [], death_cross)
+            if recent_only:
+                golden_crosses = [date for date in golden_crosses if date >= recent_cutoff]
+                death_crosses = [date for date in death_crosses if date >= recent_cutoff]
+
+            if golden_crosses or death_crosses:
+                plot_stock_data_with_indicators(historical_data, stock_symbol, golden_crosses, death_crosses)
             else:
                 print(f"📉 No significant crossover found for {stock_symbol}.")
-                updated_skipped[stock_symbol] = today_str  # Track as temporarily uninteresting
+
 
             valid_symbols.append(stock_symbol)
-
         else:
             print(f"❌ Skipping {stock_symbol} due to missing or invalid data.")
-            updated_skipped[stock_symbol] = today_str
+            updated_skipped[stock_symbol] = today.strftime("%Y-%m-%d")
 
-        time.sleep(1.5)  # Prevent rate limiting
+        time.sleep(1.5)
 
     save_skipped_symbols(updated_skipped)
     print(f"\n✅ Finished checking stocks. {len(valid_symbols)} had valid data.")
@@ -241,17 +245,32 @@ def reset_cached_data():
 COOLDOWN_FILE = "cooldown.json"
 
 def load_cooldown():
+    """
+    Return {symbol: datetime} for every symbol still in the cooldown file.
+    Accepts both 'YYYY-MM-DD' and 'YYYY-MM-DD HH:MM:SS' strings.
+    """
     if not os.path.exists(COOLDOWN_FILE):
         return {}
-    with open(COOLDOWN_FILE, "r") as f:
-        try:
-            data = json.load(f)
-            return {
-                symbol: datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-                for symbol, date_str in data.items()
-            }
-        except json.JSONDecodeError:
-            return {}
+
+    # Read the raw JSON
+    try:
+        with open(COOLDOWN_FILE, "r") as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError):
+        return {}
+
+    # Parse with either format
+    parsed = {}
+    for symbol, date_str in raw.items():
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                parsed[symbol] = datetime.strptime(date_str, fmt)
+                break
+            except ValueError:
+                continue  # try the next format
+
+    return parsed
+
 
 def save_cooldown(cooldown_dict):
     with open(COOLDOWN_FILE, "w") as f:
@@ -302,9 +321,13 @@ def main():
     print("2. Check one specific stock")
     print("3. Reset cached data")
     print("4. Add symbols to cooldown")
-    choice = input("Enter 1, 2, or 3: ").strip()
+    choice = input("Enter 1, 2, 3, or 4: ").strip()
 
     if choice == "1":
+        show_recent_only = None
+        while show_recent_only not in ('y', 'n'):
+            show_recent_only = input("Show only recent crosses? (y/n): ").strip().lower()
+        show_recent_only = (show_recent_only == 'y')
         raw_symbols = get_trending_symbols()
         skipped_dict = load_skipped_symbols()
 
@@ -315,7 +338,7 @@ def main():
         # Shuffle before slicing
         random.shuffle(today_allowed)
         max_stocks = 10
-        stock_symbols = today_allowed[:max_stocks]
+        stock_symbols = today_allowed
         print(f"Loaded {len(stock_symbols)} trending stocks (limited to {max_stocks}).")
 
     elif choice == "2":
@@ -342,8 +365,23 @@ def main():
     start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
     end_date = input("Enter the end date (YYYY-MM-DD): ").strip()
 
+    # Process in batches of MAX_STOCKS (10)
+    total = len(stock_symbols)
+    for i in range(0, total, MAX_STOCKS):
+        batch = stock_symbols[i:i+MAX_STOCKS]
+        check_stocks_for_crossovers(batch, start_date, end_date, recent_only=show_recent_only)
+
+        if i + MAX_STOCKS >= total:
+            print("\n✅ Finished processing all stocks.")
+            break
+
+        cont = input("\nContinue with next batch? (y/n): ").strip().lower()
+        if cont != 'y':
+            print("Stopping early as requested.")
+            break
+
     # Check for crossovers
-    check_stocks_for_crossovers(stock_symbols, start_date, end_date)
+    #check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only=show_recent_only)
 
 if __name__ == "__main__":
     main()
