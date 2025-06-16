@@ -237,6 +237,61 @@ def reset_cached_data():
         except Exception as e:
             print(f"❌ Failed to reset {file}: {e}")
 
+#logic for 'cooldown' stocks. for day trading.
+COOLDOWN_FILE = "cooldown.json"
+
+def load_cooldown():
+    if not os.path.exists(COOLDOWN_FILE):
+        return {}
+    with open(COOLDOWN_FILE, "r") as f:
+        try:
+            data = json.load(f)
+            return {
+                symbol: datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                for symbol, date_str in data.items()
+            }
+        except json.JSONDecodeError:
+            return {}
+
+def save_cooldown(cooldown_dict):
+    with open(COOLDOWN_FILE, "w") as f:
+        data = {
+            symbol: date.strftime("%Y-%m-%d %H:%M:%S")
+            for symbol, date in cooldown_dict.items()
+        }
+        json.dump(data, f, indent=2)
+
+def update_cooldown(symbol):
+    cooldown = load_cooldown()
+    cooldown[symbol] = datetime.now()
+    save_cooldown(cooldown)
+
+def is_in_cooldown(symbol, cooldown_period_hours=24):
+    cooldown = load_cooldown()
+    if symbol not in cooldown:
+        return False
+    last_sold = cooldown[symbol]
+    return datetime.now() - last_sold < timedelta(hours=cooldown_period_hours)
+
+def filter_cooldown_symbols(symbols):
+    return [s for s in symbols if not is_in_cooldown(s)]
+
+def add_to_cooldown(symbols, days=2):
+    try:
+        with open(COOLDOWN_FILE, "r") as f:
+            cooldown_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        cooldown_data = {}
+
+    expiry_date = (datetime.today() + timedelta(days=days)).strftime("%Y-%m-%d")
+    for symbol in symbols:
+        cooldown_data[symbol] = expiry_date
+
+    with open(COOLDOWN_FILE, "w") as f:
+        json.dump(cooldown_data, f, indent=2)
+
+    print(f"✅ Added {len(symbols)} symbols to cooldown until {expiry_date}")
+
 MAX_STOCKS = 10      
 SKIP_DAYS   = 3         
 
@@ -246,6 +301,7 @@ def main():
     print("1. Check current trending stocks")
     print("2. Check one specific stock")
     print("3. Reset cached data")
+    print("4. Add symbols to cooldown")
     choice = input("Enter 1, 2, or 3: ").strip()
 
     if choice == "1":
@@ -254,6 +310,7 @@ def main():
 
         # Exclude skipped
         today_allowed = [s for s in raw_symbols if s not in skipped_dict]
+        today_allowed = filter_cooldown_symbols(today_allowed)
 
         # Shuffle before slicing
         random.shuffle(today_allowed)
@@ -267,6 +324,14 @@ def main():
 
     elif choice == "3":
         reset_cached_data()
+        return
+    
+    elif choice == "4":
+        user_input = input("Enter the symbols sold today (comma-separated): ")
+        sold_today = [s.strip().upper() for s in user_input.split(",") if s.strip()]
+        days = input("How many days to cooldown? (default is 2): ").strip()
+        days = int(days) if days.isdigit() else 2
+        add_to_cooldown(sold_today, days)
         return
 
     else:
