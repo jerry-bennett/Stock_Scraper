@@ -342,6 +342,12 @@ def main():
         print(f"Loaded {len(stock_symbols)} trending stocks (limited to {max_stocks}).")
 
     elif choice == "2":
+        show_recent_only = None
+        while show_recent_only not in ('y', 'n'):
+            show_recent_only = input("Show only recent crosses? (y/n): ").strip().lower()
+        show_recent_only = (show_recent_only == 'y')
+        raw_symbols = get_trending_symbols()
+        skipped_dict = load_skipped_symbols()
         specific_stock = input("Enter the stock symbol (e.g., AAPL, TSLA): ").strip().upper()
         stock_symbols = [specific_stock]
 

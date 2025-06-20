@@ -1,1 +1,1 @@
-get_trending_symbols
+today_allowed
