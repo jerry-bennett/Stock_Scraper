@@ -1,0 +1,47 @@
+[
+    {
+        "symbol": "SMCI",
+        "entry_date": "2025-06-18",
+        "duration_days": 5
+    },
+    {
+        "symbol": "TDOC",
+        "entry_date": "2025-01-21",
+        "duration_days": 5
+    },
+    {
+        "symbol": "KMX",
+        "entry_date": "2024-12-06",
+        "duration_days": 5
+    },
+    {
+        "symbol": "VIPS",
+        "entry_date": "2025-03-05",
+        "duration_days": 5
+    },
+    {
+        "symbol": "PEGA",
+        "entry_date": "2025-06-02",
+        "duration_days": 5
+    },
+    {
+        "symbol": "SRRK",
+        "entry_date": "2024-10-21",
+        "duration_days": 5
+    },
+    {
+        "symbol": "TXRH",
+        "entry_date": "2025-06-18",
+        "duration_days": 5
+    },
+    {
+        "symbol": "NWL",
+        "entry_date": "2024-10-23",
+        "duration_days": 5
+    },
+    {
+        "symbol": "SIG",
+        "entry_date": "2024-11-12",
+        "duration_days": 5
+    }
+]
