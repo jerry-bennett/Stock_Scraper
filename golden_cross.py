@@ -145,11 +145,6 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only
                 print(f"\n📈 {stock_symbol}: Golden Cross on {golden_crosses[-1].strftime('%Y-%m-%d')}")
                 plot_stock_data_with_indicators(historical_data, stock_symbol, [golden_crosses[-1]], [])
 
-                log = input(f"💬 Log {stock_symbol} as a swing trade? (y/n): ").strip().lower()
-                if log == 'y':
-                    days = input("📆 Planned hold duration (in days): ").strip()
-                    days = int(days) if days.isdigit() else 5
-                    add_swing_trade(stock_symbol, golden_crosses[-1].strftime("%Y-%m-%d"), days)
             else:
                 print(f"📉 No significant crossover found for {stock_symbol}.")
 
@@ -169,78 +164,6 @@ SKIP_DAYS = 3  # Number of days to temporarily skip symbols
 
 TRENDING_CACHE_FILE = "trending_cache.json"
 TRENDING_CACHE_DAYS = 3  # days before refresh
-
-#swing trade logic
-
-SWING_TRADE_FILE = "swing_trades.json"
-
-def load_swing_trades():
-    try:
-        with open(SWING_TRADE_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def save_swing_trades(trades):
-    with open(SWING_TRADE_FILE, "w") as f:
-        json.dump(trades, f, indent=4)
-
-def add_swing_trade(symbol, entry_date, duration_days):
-    trades = load_swing_trades()
-    trades.append({
-        "symbol": symbol,
-        "entry_date": entry_date,
-        "duration_days": duration_days
-    })
-    save_swing_trades(trades)
-
-def check_expired_swing_trades():
-    trades = load_swing_trades()
-    today = datetime.today().date()
-    expired = []
-
-    for trade in trades:
-        entry_date = datetime.strptime(trade["entry_date"], "%Y-%m-%d").date()
-        if today >= entry_date + timedelta(days=trade["duration_days"]):
-            expired.append(trade)
-
-    return expired
-
-def display_swing_trades():
-    trades = load_swing_trades()
-    if not trades:
-        print("📭 No active swing trades.")
-        return
-
-    print("\n📘 Active Swing Trades:")
-    for t in trades:
-        print(f"🔹 {t['symbol']} | Entry: {t['entry_date']} | Hold: {t['duration_days']} days")
-
-HISTORY_FILE = "swing_trade_history.json"
-
-def load_trade_history():
-    try:
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def save_trade_history(history):
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=4)
-
-def move_to_trade_history(trades_to_remove):
-    active_trades = load_swing_trades()
-    history = load_trade_history()
-
-    # Filter out removed trades from active list
-    updated_trades = [t for t in active_trades if t not in trades_to_remove]
-    history.extend(trades_to_remove)
-
-    save_swing_trades(updated_trades)
-    save_trade_history(history)
-
-    print(f"🗂️ Moved {len(trades_to_remove)} trade(s) to history.")
 
 
 from datetime import datetime, timedelta
@@ -401,9 +324,7 @@ def main():
     print("2. Check one specific stock")
     print("3. Reset cached data")
     print("4. Add symbols to cooldown")
-    print("5. View swing trades due to exit")
-    print("6. Archive completed swing trades")
-    choice = input("Enter 1, 2, 3, 4, 5, or 6: ").strip()
+    choice = input("Enter 1, 2, 3, or 4 ").strip()
 
     if choice == "1":
         show_recent_only = None
@@ -445,28 +366,8 @@ def main():
         add_to_cooldown(sold_today, days)
         return
 
-    elif choice == "5":
-        expired = check_expired_swing_trades()
-        if expired:
-            print("\n📤 Trades that have reached duration:")
-            for trade in expired:
-                print(f"⚠️ {trade['symbol']} (Entered: {trade['entry_date']}, Duration: {trade['duration_days']} days)")
-    
-    elif choice == "6":
-        expired = check_expired_swing_trades()
-        if not expired:
-            print("✅ No trades to archive.")
-        else:
-            print("\n📤 Trades to be archived:")
-            for t in expired:
-                print(f"• {t['symbol']} (Entered: {t['entry_date']} | Duration: {t['duration_days']} days)")
-
-        confirm = input("🗑️ Move these trades to history and remove from active list? (y/n): ").strip().lower()
-        if confirm == 'y':
-            move_to_trade_history(expired)
-
     else:
-        print("Invalid choice. Please restart the program and choose either 1, 2 or 3.")
+        print("Invalid choice. Please restart the program and choose either 1, 2, 3 or 4.")
         return
 
     # Get date range
