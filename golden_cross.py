@@ -90,6 +90,11 @@ def plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross,
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
 
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    fig = plt.gcf()
+    plt.close(fig)  # Prevent it from auto-displaying in some environments
+    return fig
+
 def detect_crossovers(df, short=50, long=200):
     df = df.copy()
     df["SMA_short"] = df["Close"].rolling(window=short).mean()
@@ -367,7 +372,7 @@ def main():
         return
 
     else:
-        print("Invalid choice. Please restart the program and choose either 1, 2, 3 or 4.")
+        print("Invalid choice. Please restart the program and choose either 1, 2, 3 or 4: ")
         return
 
     # Get date range
