@@ -1,9 +1,14 @@
+import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
 from golden_cross import (
     fetch_historical_data,
     detect_crossovers,
     plot_stock_data_with_indicators,
+    get_trending_symbols,
+    load_skipped_symbols,
+    filter_cooldown_symbols,
+    reset_cached_data,
     get_trending_symbols
 )
 
@@ -16,6 +21,16 @@ mode = st.radio("Choose an option:", ["Specific Stock", "Trending Stocks"])
 start_date = st.date_input("Start Date", datetime(2024, 1, 1))
 end_date = st.date_input("End Date", datetime.today())
 
+# Clear button
+if st.button("📈 Get Trending Symbols"):
+    get_trending_symbols()
+    st.success("Trending symbols has been set.")
+
+# Clear button
+if st.button("🧹 Reset Trending Cache"):
+    reset_cached_data()
+    st.success("Trending cache and skipped symbols have been reset.")
+
 # Mode 1: Specific Stock
 if mode == "Specific Stock":
     symbol = st.text_input("Stock Symbol", value="AAPL")
@@ -27,46 +42,55 @@ if mode == "Specific Stock":
         if historical_data is not None:
             crossovers = detect_crossovers(historical_data)
             golden_crosses = [date for c in crossovers if isinstance(c, tuple) and c[0] == "Golden Cross" for date in [c[1]]]
-            death_crosses  = [date for c in crossovers if isinstance(c, tuple) and c[0] == "Death Cross" for date in [c[1]]]
+            
 
             if golden_crosses:
                 st.success(f"✨ Golden Cross detected on {golden_crosses[-1].strftime('%Y-%m-%d')}")
-            if death_crosses:
-                st.warning(f"⚠️ Death Cross detected on {death_crosses[-1].strftime('%Y-%m-%d')}")
 
-            fig = plot_stock_data_with_indicators(historical_data, symbol.upper(), golden_crosses, death_crosses)
+            fig = plot_stock_data_with_indicators(historical_data, symbol.upper(), golden_crosses)
             st.pyplot(fig)
         else:
             st.error("❌ Failed to load data for that stock.")
 
 # Mode 2: Trending Stocks
 elif mode == "Trending Stocks":
-    max_stocks = st.slider("Max stocks to scan", 1, 25, 10)
-    recent_only = st.checkbox("Show only recent crosses (last 30 days)", value=True)
-    run_button = st.button("Run Scan")
+    show_recent_only = st.checkbox("Show only recent crosses (last 30 days)", value=True)
+    start_date = start_date.strftime("%Y-%m-%d")
+    end_date = end_date.strftime("%Y-%m-%d")
 
-    if run_button:
-        symbols = get_trending_symbols()[:max_stocks]
-        recent_cutoff = datetime.today() - timedelta(days=30)
+    if st.button("Start Scanning Trending Stocks"):
+        raw_symbols = get_trending_symbols()
+        skipped = load_skipped_symbols()
+        allowed_symbols = [s for s in raw_symbols if s not in skipped]
+        allowed_symbols = filter_cooldown_symbols(allowed_symbols)
 
-        for symbol in symbols:
-            st.subheader(f"🔍 {symbol}")
-            data = fetch_historical_data(symbol, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+        st.session_state["symbol_batches"] = [allowed_symbols[i:i+10] for i in range(0, len(allowed_symbols), 10)]
+        st.session_state["current_batch"] = 0
 
-            if data is None or data.empty:
-                st.warning(f"⚠️ No data for {symbol}")
-                continue
+if "symbol_batches" in st.session_state and st.session_state.get("current_batch", 0) < len(st.session_state["symbol_batches"]):
+    batch = st.session_state["symbol_batches"][st.session_state["current_batch"]]
+    st.subheader(f"📊 Scanning batch {st.session_state['current_batch'] + 1} of {len(st.session_state['symbol_batches'])}")
 
-            crossovers = detect_crossovers(data)
-            golden_crosses = [date for c in crossovers if isinstance(c, tuple) and c[0] == "Golden Cross" for date in [c[1]]]
-            death_crosses  = [date for c in crossovers if isinstance(c, tuple) and c[0] == "Death Cross" for date in [c[1]]]
+    for symbol in batch:
+        st.markdown(f"### 🔍 {symbol}")
+        data = fetch_historical_data(symbol, start_date, end_date)
+        if data is None or data.empty:
+            st.warning("⚠️ No data available.")
+            continue
 
-            if recent_only:
-                golden_crosses = [date for date in golden_crosses if date >= recent_cutoff]
+        golden_crosses, _ = detect_crossovers(data)
 
-            if golden_crosses:
-                st.success(f"📈 Golden Cross on {golden_crosses[-1].strftime('%Y-%m-%d')}")
-                fig = plot_stock_data_with_indicators(data, symbol, [golden_crosses[-1]], [])
-                st.pyplot(fig)
-            else:
-                st.info("📉 No recent golden cross.")
+        if golden_crosses and isinstance(golden_crosses[-1], pd.Timestamp):
+            last_cross = golden_crosses[-1]
+            st.success(f"✨ Golden Cross on {last_cross.strftime('%Y-%m-%d')}")
+            fig = plot_stock_data_with_indicators(data, symbol, [last_cross], [])
+            st.pyplot(fig)
+        elif golden_crosses:
+            st.warning(f"⚠️ Found {len(golden_crosses)} crosses, but data is not in the expected format: {golden_crosses}")
+else:
+    st.info("📉 No recent golden cross.")
+
+    if st.button("Next Batch"):
+        if "current_batch" not in st.session_state:
+            st.session_state["current_batch"] = 0
+        st.session_state["current_batch"] += 1
