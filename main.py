@@ -21,16 +21,6 @@ mode = st.radio("Choose an option:", ["Specific Stock", "Trending Stocks"])
 start_date = st.date_input("Start Date", datetime(2024, 1, 1))
 end_date = st.date_input("End Date", datetime.today())
 
-# Clear button
-if st.button("📈 Get Trending Symbols"):
-    get_trending_symbols()
-    st.success("Trending symbols has been set.")
-
-# Clear button
-if st.button("🧹 Reset Trending Cache"):
-    reset_cached_data()
-    st.success("Trending cache and skipped symbols have been reset.")
-
 # Mode 1: Specific Stock
 if mode == "Specific Stock":
     symbol = st.text_input("Stock Symbol", value="AAPL")
@@ -54,6 +44,16 @@ if mode == "Specific Stock":
 
 # Mode 2: Trending Stocks
 elif mode == "Trending Stocks":
+    # Get Trending button
+    if st.button("📈 Get Trending Symbols"):
+        get_trending_symbols()
+        st.success("Trending symbols has been set.")
+
+    # Clear button
+    if st.button("🧹 Reset Trending Cache"):
+        reset_cached_data()
+        st.success("Trending cache and skipped symbols have been reset.")
+
     show_recent_only = st.checkbox("Show only recent crosses (last 30 days)", value=True)
     start_date = start_date.strftime("%Y-%m-%d")
     end_date = end_date.strftime("%Y-%m-%d")
@@ -80,6 +80,11 @@ if "symbol_batches" in st.session_state and st.session_state.get("current_batch"
 
         golden_crosses, _ = detect_crossovers(data)
 
+        # ✅ Filter to recent crosses if checkbox is checked
+        if show_recent_only:
+            cutoff = datetime.today() - timedelta(days=30)
+            golden_crosses = [date for date in golden_crosses if date >= cutoff]
+
         if golden_crosses and isinstance(golden_crosses[-1], pd.Timestamp):
             last_cross = golden_crosses[-1]
             st.success(f"✨ Golden Cross on {last_cross.strftime('%Y-%m-%d')}")
@@ -87,10 +92,18 @@ if "symbol_batches" in st.session_state and st.session_state.get("current_batch"
             st.pyplot(fig)
         elif golden_crosses:
             st.warning(f"⚠️ Found {len(golden_crosses)} crosses, but data is not in the expected format: {golden_crosses}")
+
+        elif golden_crosses:
+            st.warning(f"⚠️ Found {len(golden_crosses)} crosses, but data is not in the expected format: {golden_crosses}")
 else:
     st.info("📉 No recent golden cross.")
 
-    if st.button("Next Batch"):
-        if "current_batch" not in st.session_state:
-            st.session_state["current_batch"] = 0
+if st.button("Next Batch"):
+    if "current_batch" not in st.session_state:
+        st.session_state["current_batch"] = 0
+    if st.session_state["current_batch"] < len(st.session_state["symbol_batches"]) - 1:
         st.session_state["current_batch"] += 1
+        st.rerun()
+    else:
+        st.warning("✅ All batches have been scanned.")
+
