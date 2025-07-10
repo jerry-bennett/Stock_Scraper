@@ -67,6 +67,15 @@ elif mode == "Trending Stocks":
         st.session_state["symbol_batches"] = [allowed_symbols[i:i+10] for i in range(0, len(allowed_symbols), 10)]
         st.session_state["current_batch"] = 0
 
+    if st.button("Next Batch"):
+        if "current_batch" not in st.session_state:
+            st.session_state["current_batch"] = 0
+        if st.session_state["current_batch"] < len(st.session_state["symbol_batches"]) - 1:
+            st.session_state["current_batch"] += 1
+            st.rerun()
+        else:
+            st.warning("✅ All batches have been scanned.")
+
 if "symbol_batches" in st.session_state and st.session_state.get("current_batch", 0) < len(st.session_state["symbol_batches"]):
     batch = st.session_state["symbol_batches"][st.session_state["current_batch"]]
     st.subheader(f"📊 Scanning batch {st.session_state['current_batch'] + 1} of {len(st.session_state['symbol_batches'])}")
@@ -97,13 +106,4 @@ if "symbol_batches" in st.session_state and st.session_state.get("current_batch"
             st.warning(f"⚠️ Found {len(golden_crosses)} crosses, but data is not in the expected format: {golden_crosses}")
 else:
     st.info("📉 No recent golden cross.")
-
-if st.button("Next Batch"):
-    if "current_batch" not in st.session_state:
-        st.session_state["current_batch"] = 0
-    if st.session_state["current_batch"] < len(st.session_state["symbol_batches"]) - 1:
-        st.session_state["current_batch"] += 1
-        st.rerun()
-    else:
-        st.warning("✅ All batches have been scanned.")
 
