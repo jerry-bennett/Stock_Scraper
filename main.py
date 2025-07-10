@@ -14,7 +14,7 @@ from golden_cross import (
 
 st.title("📈 Golden Cross Stock Scanner")
 
-# Choose mode
+# Choose Mode
 mode = st.radio("Choose an option:", ["Specific Stock", "Trending Stocks"])
 
 # Date input shared by both modes
