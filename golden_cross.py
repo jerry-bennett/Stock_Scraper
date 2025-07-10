@@ -43,7 +43,7 @@ def calculate_indicators(historical_data):
     
     return historical_data
 
-def plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross, death_cross):
+def plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross):
     historical_data = calculate_indicators(historical_data)
 
     # Create the main plot for price and moving averages
@@ -55,11 +55,9 @@ def plot_stock_data_with_indicators(historical_data, stock_symbol, golden_cross,
     ax1.plot(historical_data.index, historical_data['50_MA'], label='50-Day MA', color='orange', linestyle='--')
     ax1.plot(historical_data.index, historical_data['200_MA'], label='200-Day MA', color='green', linestyle='--')
 
-    # Plot golden and death crosses
+    # Plot golden crosses
     for date in golden_cross:
         ax1.scatter(date, historical_data.loc[date]['Close'], color='green', label="Golden Cross", zorder=5)
-    for date in death_cross:
-        ax1.scatter(date, historical_data.loc[date]['Close'], color='red', label="Death Cross", zorder=5)
 
     ax1.set_title('Price and Moving Averages')
     ax1.set_xlabel('Date')
@@ -105,7 +103,6 @@ def detect_crossovers(df, short=50, long=200):
         return [], []
 
     golden_crosses = []
-    death_crosses = []
     prev_short = df["SMA_short"].iloc[0]
     prev_long = df["SMA_long"].iloc[0]
 
@@ -116,13 +113,11 @@ def detect_crossovers(df, short=50, long=200):
 
         if prev_short < prev_long and curr_short >= curr_long:
             golden_crosses.append(date)
-        elif prev_short > prev_long and curr_short <= curr_long:
-            death_crosses.append(date)
 
         prev_short = curr_short
         prev_long = curr_long
 
-    return golden_crosses, death_crosses
+    return golden_crosses
 
 def check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only=False, recent_days=30):
     valid_symbols = []
@@ -140,11 +135,10 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only
 
         historical_data = fetch_historical_data(stock_symbol, start_date, end_date)
         if historical_data is not None:
-            golden_crosses, death_crosses = detect_crossovers(historical_data)
+            golden_crosses = detect_crossovers(historical_data)
 
             if recent_only:
                 golden_crosses = [date for date in golden_crosses if date >= recent_cutoff]
-                death_crosses = [date for date in death_crosses if date >= recent_cutoff]
 
             if golden_crosses:
                 print(f"\n📈 {stock_symbol}: Golden Cross on {golden_crosses[-1].strftime('%Y-%m-%d')}")
