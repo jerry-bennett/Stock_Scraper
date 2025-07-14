@@ -104,6 +104,17 @@ elif mode == "🔥 Trending Stocks":
                         st.info("📭 No data.")
                     else:
                         golden_crosses = detect_crossovers(data)
+                        flat = []
+                        for d in golden_crosses:
+                            if isinstance(d, list):
+                                flat.extend(d)
+                            else:
+                                flat.append(d)
+                        golden_crosses = flat
+
+                        if show_recent_only:
+                            cutoff = datetime.today() - timedelta(days=30)
+                            golden_crosses = [d for d in golden_crosses if d >= cutoff]
                         if show_recent_only:
                             cutoff = datetime.today() - timedelta(days=30)
                             golden_crosses = [d for d in golden_crosses if d >= cutoff]
