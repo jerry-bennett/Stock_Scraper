@@ -153,7 +153,7 @@ def check_stocks_for_crossovers(stock_symbols, start_date, end_date, recent_only
             print(f"❌ Skipping {stock_symbol} due to missing or invalid data.")
             updated_skipped[stock_symbol] = today.strftime("%Y-%m-%d")
 
-        time.sleep(1.5)
+        time.sleep(0.5)
 
     save_skipped_symbols(updated_skipped)
     print(f"\n✅ Finished checking stocks. {len(valid_symbols)} had valid data.")
