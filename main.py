@@ -22,7 +22,7 @@ mode = st.radio("Choose a mode:", ["🔎 Specific Stock", "🔥 Trending Stocks"
 with st.expander("⚙️ Scan Settings", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", datetime(2024, 1, 1))
+        start_date = st.date_input("Start Date", datetime(2025, 1, 1))
     with col2:
         end_date = st.date_input("End Date", datetime.today())
 
